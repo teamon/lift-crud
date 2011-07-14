@@ -16,39 +16,59 @@ object ItemStorage {
 
 case class Item(name: String)
 
-trait Crud extends MVCHelper {
-    implicit def CssSel2Option(sel: CssSel) = Some(sel)
+object Crud {
+    trait Base extends MVCHelper {
+        type Entity
 
-    val Prefix: String
+        implicit def CssSel2Option(sel: CssSel) = Some(sel)
 
-    val Index = Prefix :: Nil
+        val Prefix: String
 
-    def index: Option[CssSel]
-    def show(param: String): Option[CssSel]
+        def linkTo(label: String, param: String) =
+            <a href={"/" + Prefix + "/" + param}>{label}</a>
 
-    serve {
-        case Prefix :: Nil => render(index, "index")
-        case Prefix :: param :: Nil => render(show(param), "show")
+        protected def render(opt: Option[CssSel], tplName: String) =
+            Templates(Prefix :: tplName :: Nil).flatMap(t => opt.map(_(t)))
     }
 
-    def linkTo(label: String, param: String) =
-        <a href={"/" + Prefix + "/" + param}>{label}</a>
+    trait Index extends Base {
+        def index: Option[CssSel]
 
-    protected def render(opt: Option[CssSel], tplName: String) =
-        Templates(Prefix :: tplName :: Nil).flatMap(t => opt.map(_(t)))
+        serve {
+            case Prefix :: Nil => render(index, "index")
+        }
+    }
+
+    trait Show extends Base {
+        object entity extends RequestVar[Option[Entity]](None)
+
+        def find(param: String): Option[Entity]
+        def show(obj: Entity): Option[CssSel]
+
+        serve {
+            case Prefix :: param :: Nil => find(param) map { e =>
+                entity(Some(e))
+                render(show(e), "show")
+            }
+        }
+
+    }
+
+    trait All extends Index with Show
 }
 
-object ItemsController extends Crud {
+object ItemsController extends Crud.All {
+    type Entity = Item
     val Prefix = "items"
+
+    def find(name: String) = ItemStorage.get(name)
 
     def index = ".row *" #> ItemStorage.all.map { item =>
         ".name *"  #> item.name &
         ".show *"  #> linkTo("Show", item.name)
     }
 
-    def show(name: String) = ItemStorage.get(name).map { item =>
-        ".name" #> item.name
-    }
+    def show(item: Item) = ".name" #> item.name
 }
 
 object AddItem extends LiftScreen {
@@ -59,3 +79,13 @@ object AddItem extends LiftScreen {
         S.redirectTo("/items/" + name.is, () => S.notice("Item " + name.is + " created"))
     }
 }
+
+class EditItem extends LiftScreen {
+    val name = field("Name", ItemsController.entity.get.map(_.name) getOrElse "", trim, valMinLen(1, "Name can not be blank"))
+
+    def finish() {
+        ItemStorage.save(Item(name.is))
+        S.redirectTo("/items/" + name.is, () => S.notice("Item " + name.is + " created"))
+    }
+}
+
