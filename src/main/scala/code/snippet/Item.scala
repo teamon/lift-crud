@@ -71,21 +71,22 @@ object ItemsController extends Crud.All {
     def show(item: Item) = ".name" #> item.name
 }
 
-object AddItem extends LiftScreen {
-    val name = field("Name", "", trim, valMinLen(1, "Name can not be blank"))
+trait ItemScreen extends LiftScreen {
+    val item = ItemsController.entity.get
+    val name = field("Name", item.map(_.name) getOrElse "", trim, valMinLen(1, "Name can not be blank"))
+}
 
+object AddItem extends ItemScreen {
     def finish() {
         ItemStorage.save(Item(name.is))
         S.redirectTo("/items/" + name.is, () => S.notice("Item " + name.is + " created"))
     }
 }
 
-class EditItem extends LiftScreen {
-    val name = field("Name", ItemsController.entity.get.map(_.name) getOrElse "", trim, valMinLen(1, "Name can not be blank"))
-
+class EditItem extends ItemScreen {
     def finish() {
         ItemStorage.save(Item(name.is))
-        S.redirectTo("/items/" + name.is, () => S.notice("Item " + name.is + " created"))
+        S.redirectTo("/items/" + name.is, () => S.notice("Item " + name.is + " updated"))
     }
 }
 
